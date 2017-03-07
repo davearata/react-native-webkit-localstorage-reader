@@ -1,5 +1,8 @@
 package com.reactnative.webkitlocalstoragereader;
 
+import java.lang.Exception;
+import java.lang.StringBuilder;
+
 import com.facebook.react.bridge.ReactApplicationContext;
 import com.facebook.react.bridge.ReactContextBaseJavaModule;
 import com.facebook.react.bridge.ReactMethod;
@@ -9,10 +12,10 @@ import android.util.Log;
 import android.database.sqlite.SQLiteDatabase;
 import android.database.Cursor;
 
-private class Database {
+class Database {
   private static final String TAG = "ReactNativeWebkitLocalStorageReaderDatabase";
   private static final String DBPATH = "/data/user/0/";
-  private static final String DBNAME = "/app_xwalkcore/Default/Local\ Storage/file__0.localstorage";
+  private static final String DBNAME = "/app_xwalkcore/Default/Local Storage/file__0.localstorage";
 
   private SQLiteDatabase db;
   private final ReactApplicationContext reactContext;
@@ -24,20 +27,34 @@ private class Database {
   public void open() {
     final String packageName = this.reactContext.getPackageName();
     final String myPath = DBPATH + packageName + DBNAME;
-    this.db = SQLiteDatabase.openDatabase(Environment.getExternalStorageDirectory() + myPath, null, SQLiteDatabase.OPEN_READWRITE);
+    this.db = SQLiteDatabase.openDatabase(myPath, null, SQLiteDatabase.OPEN_READWRITE);
   }
 
   public String loadDataAsString() {
-    final Cursor queryCursor = rawQuery("SELECT key,value FROM ItemTable", []);
+    final StringBuilder sb = new StringBuilder("{");
+    final Cursor queryCursor = this.db.rawQuery("SELECT key,value FROM ItemTable", null);
     try {
       while (queryCursor.moveToNext()) {
-        final String key = getString(0);
+        final String key = queryCursor.getString(0);
         Log.v(TAG, "key=" + key);
+        final byte[] data = queryCursor.getBlob(1);
+        try {
+          final String value = new String(data, "UTF-16LE");
+          Log.v(TAG, "value=" + value);
+          sb.append("\"").append(key).append("\"").append(":").append(value);
+          if(!queryCursor.isLast()) {
+            sb.append(",");
+          }
+        } catch (Exception e) {
+          Log.v(TAG, "error while reading local storage db");
+        }
       }
     } finally {
       queryCursor.close();
     }
-    return "";
+    final String jsonString = sb.append("}").toString();
+    Log.v(TAG, "jsonString=" + jsonString);
+    return jsonString;
   }
 
   public synchronized void close() {
@@ -48,7 +65,7 @@ private class Database {
 class ReactNativeWebkitLocalStorageReaderModule extends ReactContextBaseJavaModule {
   private final ReactApplicationContext context;
 
-  public ReactNativeMupdfModule(ReactApplicationContext reactContext) {
+  public ReactNativeWebkitLocalStorageReaderModule(ReactApplicationContext reactContext) {
     super(reactContext);
     this.context = reactContext;
   }
@@ -65,8 +82,13 @@ class ReactNativeWebkitLocalStorageReaderModule extends ReactContextBaseJavaModu
   @ReactMethod
   public void get(Callback successCallback) {
     final Database database = new Database(this.context);
-    database.open();
-    database.close();
-    successCallback.invoke(jsonStirng)
+    try {
+      database.open();
+      final String jsonString = database.loadDataAsString();
+      database.close();
+      successCallback.invoke(jsonString);
+    } catch (Exception e) {
+      successCallback.invoke("");
+    }
   }
 }
