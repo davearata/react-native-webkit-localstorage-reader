@@ -1,4 +1,4 @@
-#import "RCTBridgeModule.h"
+#import <React/RCTBridgeModule.h>
 #import <sqlite3.h>
 
 @interface WebkitLocalStorageReader : NSObject<RCTBridgeModule>
